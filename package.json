@@ -1,0 +1,27 @@
+{
+  "name": "sdk",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./vite": "./src/vite.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "fmt": "prettier --write src examples/demo/src",
+    "fmt-check": "prettier --check src examples/demo/src"
+  },
+  "dependencies": {
+    "@aztec/bb.js": "3.0.0-nightly.20251104",
+    "@noir-lang/noir_js": "1.0.0-beta.16",
+    "garaga": "1.1.0",
+    "noir-jwt": "0.4.5",
+    "poseidon-lite": "^0.3.0",
+    "starknet": "10.8.0"
+  },
+  "devDependencies": {
+    "prettier": "3.9.9",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  }
+}
