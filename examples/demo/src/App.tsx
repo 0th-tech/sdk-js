@@ -1,6 +1,6 @@
 /* @refresh reload */
 
-import { createSignal, onMount } from "solid-js";
+import { Show, createSignal, onMount } from "solid-js";
 import { render } from "solid-js/web";
 import { CallData, RpcProvider, cairo, type Call } from "starknet";
 import {
@@ -10,9 +10,8 @@ import {
   resumeSession,
   sessionAccount,
   startLogin,
-  type Circuit,
   type CompiledCircuit,
-  type Deployment,
+  type LoginConfig,
   type StoredSession,
 } from "sdk";
 
@@ -27,18 +26,23 @@ function need(name: string) {
   return value;
 }
 
-const CLIENT_ID = need("VITE_GOOGLE_CLIENT_ID");
-// Must match the client id's registered URI byte for byte, trailing slash included, or Google
-// answers 400 redirect_uri_mismatch. Not location.pathname, so a deep link still sends this value
-const REDIRECT_URI = `${location.origin}/`;
-
 const RPC_URL = need("VITE_RPC_URL");
-const SERVER_URL = need("VITE_SERVER_URL");
 
-const deployment: Deployment = {
-  registry: need("VITE_REGISTRY"),
-  verifier: need("VITE_VERIFIER"),
-  accountClassHash: need("VITE_ACCOUNT_CLASS_HASH"),
+const config: LoginConfig = {
+  clientId: need("VITE_GOOGLE_CLIENT_ID"),
+  // Must match the client id's registered URI, trailing slash included
+  // Not location.pathname, so a deep link still sends this value
+  redirectUri: `${location.origin}/`,
+  deployment: {
+    registry: need("VITE_REGISTRY"),
+    verifier: need("VITE_VERIFIER"),
+    accountClassHash: need("VITE_ACCOUNT_CLASS_HASH"),
+  },
+  serverUrl: need("VITE_SERVER_URL"),
+  circuit: {
+    program: program as CompiledCircuit,
+    verificationKey: Uint8Array.fromBase64(vkUrl.split(",")[1]!),
+  },
 };
 
 const TRANSFER = 1000n;
@@ -51,40 +55,53 @@ const transfer = (to: string, amount: bigint): Call => ({
   calldata: CallData.compile([to, cairo.uint256(amount)]),
 });
 
-const circuit: Circuit = {
-  program: program as CompiledCircuit,
-  verificationKey: Uint8Array.fromBase64(vkUrl.split(",")[1]!),
-};
-
 function App() {
   const [log, setLog] = createSignal("");
   const say = (line: string) => setLog((l) => l + line + "\n");
+  const [session, setSession] = createSignal<StoredSession>();
+  const provider = new RpcProvider({ nodeUrl: RPC_URL });
 
   function signIn() {
     setLog("");
-    say(`redirect_uri: ${REDIRECT_URI}`);
-    startLogin({ clientId: CLIENT_ID, redirectUri: REDIRECT_URI });
+    say(`redirect_uri: ${config.redirectUri}`);
+    startLogin(config);
   }
 
-  async function spend(session: StoredSession) {
-    say(`address: ${session.address}`);
+  function signedIn(stored: StoredSession) {
+    setSession(stored);
+    say(`address: ${stored.address}`);
     say(
-      `session until: ${new Date(Number(session.expiry) * 1000).toISOString()}`,
+      `session until: ${new Date(Number(stored.expiry) * 1000).toISOString()}`,
     );
+  }
 
-    const account = sessionAccount(
-      new RpcProvider({ nodeUrl: RPC_URL }),
-      session,
-    );
-    // Sends to itself, so the demo needs no second address on any network
-    const { transaction_hash } = await account.execute([
-      transfer(session.address, TRANSFER),
-    ]);
-    say(`transfer signed by the session key: ${transaction_hash}`);
+  async function spend(stored: StoredSession) {
+    try {
+      const balance = await provider.callContract({
+        contractAddress: STRK,
+        entrypoint: "balance_of",
+        calldata: [stored.address],
+      });
+      // The relayer pays for the login only, so a new account cannot pay for a transfer
+      if (balance.every((half) => BigInt(half) === 0n)) {
+        say(`the account holds no STRK: send some to ${stored.address}`);
+        return;
+      }
+
+      const { transaction_hash } = await sessionAccount(
+        provider,
+        stored,
+      ).execute([transfer(stored.address, TRANSFER)]);
+      say(`transfer signed by the session key: ${transaction_hash}`);
+    } catch (e) {
+      say(`error: ${e}`);
+      console.error(e);
+    }
   }
 
   function signOut() {
     clearSession();
+    setSession();
     setLog("");
     say("signed out");
   }
@@ -92,9 +109,9 @@ function App() {
   // Runs at mount: the user is back from Google, or already has a session
   async function resume() {
     try {
-      const kept = resumeSession();
+      const kept = resumeSession(config.deployment);
       if (kept) {
-        await spend(kept);
+        signedIn(kept);
         return;
       }
 
@@ -105,14 +122,10 @@ function App() {
         `threads: ${crossOriginIsolated ? navigator.hardwareConcurrency : 1}`,
       );
 
-      await spend(
-        await finishLogin(answer, {
-          clientId: CLIENT_ID,
-          deployment,
-          serverUrl: SERVER_URL,
-          circuit,
-          onStep: (step, ms) => say(`${step}: ${(ms / 1000).toFixed(1)}s`),
-        }),
+      signedIn(
+        await finishLogin(answer, config, (step, ms) =>
+          say(`${step}: ${(ms / 1000).toFixed(1)}s`),
+        ),
       );
     } catch (e) {
       say(`error: ${e}`);
@@ -126,6 +139,9 @@ function App() {
       <h1>0th</h1>
       <button onClick={signIn}>Sign in with Google</button>
       <button onClick={signOut}>Sign out</button>
+      <Show when={session()}>
+        {(stored) => <button onClick={() => spend(stored())}>Transfer</button>}
+      </Show>
       <pre>{log()}</pre>
     </main>
   );

@@ -16,8 +16,8 @@ import { type Circuit, type ProofStep, proveLogin } from "./proof.ts";
 import { fetchSalt, relay } from "./server.ts";
 import { type StoredSession, storeSession } from "./session.ts";
 
-// A day, well under the 30 the account caps a session at
-const SESSION_LENGTH = 24n * 3600n;
+const DAY = 24 * 3600;
+const MAX_SESSION_LENGTH = 30 * DAY;
 
 export type Step = ProofStep | "relay";
 
@@ -26,19 +26,23 @@ export type LoginConfig = {
   clientId: string;
   // Must match what is registered, byte for byte, trailing slash included
   redirectUri: string;
-};
-
-export type FinishConfig = {
-  clientId: string;
   deployment: Deployment;
   serverUrl: string;
   circuit: Circuit;
-  onStep?: (step: Step, ms: number) => void;
+  // Seconds a session key stays valid, a day by default
+  sessionLength?: number;
 };
 
-export function startLogin({ clientId, redirectUri }: LoginConfig) {
+export function startLogin({
+  clientId,
+  redirectUri,
+  sessionLength = DAY,
+}: LoginConfig) {
+  if (!(sessionLength > 0 && sessionLength < MAX_SESSION_LENGTH))
+    throw new Error("sessionLength must be above 0 and under 30 days");
+
   const session = newSessionKey();
-  const expiry = BigInt(Math.floor(Date.now() / 1000)) + SESSION_LENGTH;
+  const expiry = BigInt(Math.floor(Date.now() / 1000 + sessionLength));
   const secret = randomSecret();
   redirectToGoogle(
     clientId,
@@ -53,7 +57,8 @@ export const pendingLogin = readGoogleAnswer;
 
 export async function finishLogin(
   { jwt, session, expiry, secret }: PendingLogin,
-  { clientId, deployment, serverUrl, circuit, onStep }: FinishConfig,
+  { clientId, deployment, serverUrl, circuit }: LoginConfig,
+  onStep?: (step: Step, ms: number) => void,
 ): Promise<StoredSession> {
   // Checked up front so a bad letter fails before spending time on a proof
   const { aud, sub } = claims(
@@ -91,6 +96,6 @@ export async function finishLogin(
   onStep?.("relay", performance.now() - since);
 
   const stored = { address, privateKey: session.privateKey, expiry };
-  storeSession(stored);
+  storeSession(stored, deployment);
   return stored;
 }

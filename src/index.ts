@@ -1,5 +1,5 @@
 export { finishLogin, pendingLogin, startLogin } from "./login.ts";
-export type { FinishConfig, LoginConfig, Step } from "./login.ts";
+export type { LoginConfig, Step } from "./login.ts";
 export type { PendingLogin } from "./google.ts";
 
 export { sessionAccount } from "./account.ts";
