@@ -31,7 +31,7 @@ export const hasStringFields = <K extends string>(
   );
 
 // One part of a JWT, JSON parsed: 0 is the header, 1 the payload
-export function segment(jwt: string, i: 0 | 1): unknown {
+function segment(jwt: string, i: 0 | 1): unknown {
   const parts = jwt.split(".");
   if (parts.length !== 3) throw new Error("not a JWT: expected three parts");
   return JSON.parse(

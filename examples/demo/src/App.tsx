@@ -10,14 +10,9 @@ import {
   resumeSession,
   sessionAccount,
   startLogin,
-  type CompiledCircuit,
   type LoginConfig,
   type StoredSession,
 } from "sdk";
-
-import program from "../../../target/circuit/login.json";
-// Inlined as a data URL, so the key costs no request
-import vkUrl from "../../../target/circuit/vk?inline";
 
 // Vite inlines import.meta.env at build time, so an unset variable is undefined in the bundle
 function need(name: string) {
@@ -39,10 +34,6 @@ const config: LoginConfig = {
     accountClassHash: need("VITE_ACCOUNT_CLASS_HASH"),
   },
   serverUrl: need("VITE_SERVER_URL"),
-  circuit: {
-    program: program as CompiledCircuit,
-    verificationKey: Uint8Array.fromBase64(vkUrl.split(",")[1]!),
-  },
 };
 
 const TRANSFER = 1000n;
@@ -60,11 +51,16 @@ function App() {
   const say = (line: string) => setLog((l) => l + line + "\n");
   const [session, setSession] = createSignal<StoredSession>();
   const provider = new RpcProvider({ nodeUrl: RPC_URL });
+  const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+  const login: LoginConfig = {
+    ...config,
+    onStep: (step, ms) => say(`${step}: ${seconds(ms)}`),
+  };
 
   function signIn() {
     setLog("");
-    say(`redirect_uri: ${config.redirectUri}`);
-    startLogin(config);
+    say(`redirect_uri: ${login.redirectUri}`);
+    startLogin(login);
   }
 
   function signedIn(stored: StoredSession) {
@@ -82,17 +78,21 @@ function App() {
         entrypoint: "balance_of",
         calldata: [stored.address],
       });
-      // The relayer pays for the login only, so a new account cannot pay for a transfer
+      // An empty account cannot pay for the transfer, so it is checked before the relayer pays to
+      // register the key
       if (balance.every((half) => BigInt(half) === 0n)) {
         say(`the account holds no STRK: send some to ${stored.address}`);
         return;
       }
 
+      const since = performance.now();
       const { transaction_hash } = await sessionAccount(
         provider,
         stored,
+        login,
       ).execute([transfer(stored.address, TRANSFER)]);
       say(`transfer signed by the session key: ${transaction_hash}`);
+      say(`sent after: ${seconds(performance.now() - since)}`);
     } catch (e) {
       say(`error: ${e}`);
       console.error(e);
@@ -118,15 +118,10 @@ function App() {
       const answer = pendingLogin();
       if (!answer) return;
       say("back from Google");
-      say(
-        `threads: ${crossOriginIsolated ? navigator.hardwareConcurrency : 1}`,
-      );
 
-      signedIn(
-        await finishLogin(answer, config, (step, ms) =>
-          say(`${step}: ${(ms / 1000).toFixed(1)}s`),
-        ),
-      );
+      const since = performance.now();
+      signedIn(await finishLogin(answer, login));
+      say(`signed in after: ${seconds(performance.now() - since)}`);
     } catch (e) {
       say(`error: ${e}`);
       console.error(e);

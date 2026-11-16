@@ -21,7 +21,5 @@ jobs:
           node-version-file: .tool-versions
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # The demo imports the compiled circuit, so its typecheck needs the download
-      - run: make circuit
       - run: make typecheck
       - run: make fmt-check

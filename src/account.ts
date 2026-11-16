@@ -6,6 +6,7 @@ import {
   hash,
   stark,
 } from "starknet";
+import { type OnStep, registerSession } from "./register.ts";
 
 // What an account's address is computed from, with the identity
 export type Deployment = {
@@ -34,7 +35,30 @@ class SessionSigner extends Signer {
   }
 }
 
+// The account exists on chain and knows the session key only once a transaction needs it
+class SessionAccount extends Account {
+  #register: () => Promise<void>;
+
+  constructor(
+    options: ConstructorParameters<typeof Account>[0],
+    register: () => Promise<void>,
+  ) {
+    super(options);
+    this.#register = register;
+  }
+
+  override async execute(...args: Parameters<Account["execute"]>) {
+    await this.#register();
+    return super.execute(...args);
+  }
+}
+
 export const sessionAccount = (
   provider: RpcProvider,
   { address, privateKey }: { address: string; privateKey: string },
-) => new Account({ provider, address, signer: new SessionSigner(privateKey) });
+  { serverUrl, onStep }: { serverUrl: string; onStep?: OnStep },
+) =>
+  new SessionAccount(
+    { provider, address, signer: new SessionSigner(privateKey) },
+    () => registerSession(provider, address, serverUrl, onStep),
+  );

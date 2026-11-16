@@ -1,7 +1,6 @@
-import { hasStringFields, segment } from "./identity.ts";
+import { hasStringFields } from "./identity.ts";
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-const JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 const PENDING = "0th.login";
 
 // What crosses the redirect in sessionStorage, so every value is a string
@@ -80,19 +79,4 @@ export function readGoogleAnswer(): PendingLogin | undefined {
     expiry: BigInt(parsed.expiry),
     secret: BigInt(parsed.secret),
   };
-}
-
-// The key that sealed the letter, picked from Google's JWKS by the letter's kid
-export async function googleKey(jwt: string) {
-  const header = segment(jwt, 0);
-  if (!hasStringFields(header, ["kid"])) throw new Error("letter has no kid");
-
-  const res = await fetch(JWKS_URL);
-  if (!res.ok) throw new Error(`cannot reach Google's JWKS (${JWKS_URL})`);
-  const { keys } = (await res.json()) as {
-    keys: (JsonWebKey & { kid?: string })[];
-  };
-  const key = keys.find((candidate) => candidate.kid === header.kid);
-  if (!key) throw new Error(`Google's JWKS has no key ${header.kid}`);
-  return key;
 }

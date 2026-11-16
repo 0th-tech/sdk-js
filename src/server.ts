@@ -19,12 +19,15 @@ async function post<T>(url: string, input: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
+// The calldata register_session takes. The server already sees the letter at /salt
+export const prove = (
+  serverUrl: string,
+  login: { jwt: string; publicKey: string; expiry: string; secret: string },
+) => post<{ proof: string[]; identity: string }>(`${serverUrl}/prove`, login);
+
 // Deploys the account and registers the session key in one transaction, paid by the relayer
-export const relay = (serverUrl: string, identity: bigint, proof: bigint[]) =>
-  post<{ address: string }>(`${serverUrl}/relay`, {
-    identity: String(identity),
-    proof: proof.map(String),
-  });
+export const relay = (serverUrl: string, identity: string, proof: string[]) =>
+  post<{ address: string }>(`${serverUrl}/relay`, { identity, proof });
 
 // The salt is derived server side, so an address cannot be computed from the claims alone
 export const fetchSalt = async (serverUrl: string, jwt: string) =>
