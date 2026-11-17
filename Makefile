@@ -8,7 +8,7 @@ CIRCUIT_VERSION ?= v0.1.1
 ACCOUNT_VERSION ?= v0.1.1
 REGISTRY_VERSION ?= v0.1.1
 
-SERVER ?= https://github.com/0th-tech/server.git\#main
+SERVER_IMAGE ?= ghcr.io/0th-tech/server:v0.1.0
 DEVNET_IMAGE = starknetfoundation/starknet-devnet-rs:0.11.0
 
 E2E_DEVNET_PORT = 5151
@@ -40,11 +40,10 @@ test: $(FIXTURE)
 # A login then a transfer on a new devnet. Linux only, for the host network
 e2e: $(FIXTURE) $(CONTRACTS)
 	$(E2E_DOWN)
-	docker build -q -t 0th-e2e-server $(SERVER)
 	docker run -d --name 0th-e2e-devnet --network host $(DEVNET_IMAGE) --seed 0 --port $(E2E_DEVNET_PORT)
 	RPC_URL=http://127.0.0.1:$(E2E_DEVNET_PORT)/rpc PORT=$(E2E_SERVER_PORT) node e2e/deploy.ts \
 		|| { $(E2E_DOWN); exit 1; }
-	docker run -d --name 0th-e2e-server --network host --env-file target/e2e.env 0th-e2e-server
+	docker run -d --name 0th-e2e-server --network host --env-file target/e2e.env $(SERVER_IMAGE)
 	node --env-file=target/e2e.env --test e2e/ || { docker logs 0th-e2e-server; $(E2E_DOWN); exit 1; }
 	$(E2E_DOWN)
 
