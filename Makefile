@@ -1,4 +1,7 @@
-.PHONY: demo circuit contracts test e2e typecheck clean fmt fmt-check
+.PHONY: demo test e2e typecheck clean fmt fmt-check
+
+# A download that fails leaves no partial file behind
+.DELETE_ON_ERROR:
 
 RELEASES = https://github.com/0th-tech
 CIRCUIT_VERSION ?= v0.1.1
@@ -15,31 +18,27 @@ E2E_DOWN = docker rm -f 0th-e2e-devnet 0th-e2e-server > /dev/null 2>&1 || true
 demo:
 	pnpm --filter demo dev
 
-# target/circuit/fixture.json, from the circuit's release
-circuit:
-	mkdir -p target/circuit
-	curl -fsSL $(RELEASES)/circuit/releases/download/$(CIRCUIT_VERSION)/fixture.json -o target/circuit/fixture.json
+# Release files, downloaded again whenever this Makefile changes, since it pins the versions
+DOWNLOAD = mkdir -p $(@D) && curl -fsSL $(RELEASES)/$(1)/releases/download/$(2)/$(@F) -o $@
 
-# target/contracts/*.json, the compiled classes of the account's and the registry's releases
-contracts:
-	mkdir -p target/contracts
-	for file in account_Account verifier_UltraKeccakZKHonkVerifier; do \
-		for kind in contract_class compiled_contract_class; do \
-			curl -fsSL $(RELEASES)/account/releases/download/$(ACCOUNT_VERSION)/$$file.$$kind.json \
-				-o target/contracts/$$file.$$kind.json || exit 1; \
-		done; \
-	done
-	for kind in contract_class compiled_contract_class; do \
-		curl -fsSL $(RELEASES)/registry/releases/download/$(REGISTRY_VERSION)/registry_Registry.$$kind.json \
-			-o target/contracts/registry_Registry.$$kind.json || exit 1; \
-	done
+target/circuit/%: Makefile
+	$(call DOWNLOAD,circuit,$(CIRCUIT_VERSION))
 
-# Needs make circuit once
-test:
+target/contracts/registry_%: Makefile
+	$(call DOWNLOAD,registry,$(REGISTRY_VERSION))
+
+target/contracts/%: Makefile
+	$(call DOWNLOAD,account,$(ACCOUNT_VERSION))
+
+FIXTURE = target/circuit/fixture.json
+CONTRACTS = $(foreach name,account_Account verifier_UltraKeccakZKHonkVerifier registry_Registry, \
+	target/contracts/$(name).contract_class.json target/contracts/$(name).compiled_contract_class.json)
+
+test: $(FIXTURE)
 	pnpm test
 
 # A login then a transfer on a new devnet. Linux only, for the host network
-e2e:
+e2e: $(FIXTURE) $(CONTRACTS)
 	$(E2E_DOWN)
 	docker build -q -t 0th-e2e-server $(SERVER)
 	docker run -d --name 0th-e2e-devnet --network host $(DEVNET_IMAGE) --seed 0 --port $(E2E_DEVNET_PORT)

@@ -21,7 +21,6 @@ jobs:
           node-version-file: .tool-versions
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: make circuit
       - run: make test
       - run: make typecheck
       - run: make fmt-check
@@ -38,5 +37,4 @@ jobs:
           node-version-file: .tool-versions
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: make circuit contracts
       - run: make e2e
