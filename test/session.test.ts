@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { resumeSession, storeSession } from "../src/session.ts";
+import { stored } from "./storage.ts";
 
 const DEPLOYMENT = {
   registry: "0x1",
@@ -9,13 +10,6 @@ const DEPLOYMENT = {
 };
 const HOUR = 3600n;
 const now = () => BigInt(Math.floor(Date.now() / 1000));
-
-const stored = new Map<string, string>();
-globalThis.localStorage = {
-  getItem: (key) => stored.get(key) ?? null,
-  setItem: (key, value) => void stored.set(key, value),
-  removeItem: (key) => void stored.delete(key),
-} as Storage;
 
 const store = (expiry: bigint) =>
   storeSession({ address: "0x4", privateKey: "0x5", expiry }, DEPLOYMENT, {

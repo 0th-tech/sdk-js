@@ -7,9 +7,9 @@
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p test",
-    "fmt": "prettier --write src test examples/demo/src",
-    "fmt-check": "prettier --check src test examples/demo/src"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
+    "fmt": "prettier --write src test e2e examples/demo/src",
+    "fmt-check": "prettier --check src test e2e examples/demo/src"
   },
   "dependencies": {
     "poseidon-lite": "^0.3.0",
