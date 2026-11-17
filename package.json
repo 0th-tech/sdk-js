@@ -6,15 +6,17 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "fmt": "prettier --write src examples/demo/src",
-    "fmt-check": "prettier --check src examples/demo/src"
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p test",
+    "fmt": "prettier --write src test examples/demo/src",
+    "fmt-check": "prettier --check src test examples/demo/src"
   },
   "dependencies": {
     "poseidon-lite": "^0.3.0",
     "starknet": "10.8.0"
   },
   "devDependencies": {
+    "@types/node": "^26.6.4",
     "prettier": "3.9.9",
     "typescript": "~6.0.2"
   }
